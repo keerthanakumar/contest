@@ -213,7 +213,8 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     features['numInvaders'] = len(invaders)
     if len(enemies) > 0:
       dists = [self.getMazeDistance(myPos, a.getPosition()) for a in enemies if a.getPosition() != None]
-      features['invaderDistance'] = min(dists)
+      if len(dists) > 0:
+        features['invaderDistance'] = min(dists)
 
     if action == Directions.STOP: features['stop'] = 1
     rev = Directions.REVERSE[gameState.getAgentState(self.index).configuration.direction]
