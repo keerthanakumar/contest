@@ -39,7 +39,7 @@ class SmartAgent(CaptureAgent):
   def __init__(self, index, timeForComputing = .1):
     CaptureAgent.__init__(self, index, timeForComputing)
 
-    self.depth = 1
+    self.depth = 4
     self.numParticles = 10
     self.steps = [(0, 0), (0, 1), (1, 0), (-1, 0), (0, -1)]
 
