@@ -187,7 +187,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
     return features
 
   def getWeights(self, gameState, action):
-    return {'successorScore': 100, 'distanceToFood': -5, 'foodDistance': -1, 'invaderDistance': 10}
+    return {'successorScore': 100, 'distanceToFood': -25, 'foodDistance': -1, 'invaderDistance': 10}
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
   """
@@ -212,8 +212,8 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     enemies = [successor.getAgentState(i) for i in self.getOpponents(successor)]
     invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
     features['numInvaders'] = len(invaders)
-    if len(invaders) > 0:
-      dists = [self.getMazeDistance(myPos, a.getPosition()) for a in invaders]
+    if len(enemies) > 0:
+      dists = [self.getMazeDistance(myPos, a.getPosition()) for a in enemies]
       features['invaderDistance'] = min(dists)
 
     if action == Directions.STOP: features['stop'] = 1
