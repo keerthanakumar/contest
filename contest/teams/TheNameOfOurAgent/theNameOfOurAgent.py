@@ -131,8 +131,6 @@ class SmartAgent(CaptureAgent):
 
     actions = gameState.getLegalActions(self.index)
     for action in actions:
-      if action == "Stop":
-        continue
       expectation = self.expectimax(gameState.generateSuccessor(self.index, action), self.index, self.enemyParticles, self.depth)
       print action, expectation
       if expectation > bestExpectation:
@@ -184,8 +182,6 @@ class SmartAgent(CaptureAgent):
     # maxUtil = -float("inf")
 
     for action in actions:
-      if action == "Stop":
-        continue
       successor = gameState.generateSuccessor(agentIndex, action)
       value = self.chooseValue(successor, agentIndex, particles, action, depth)
       sumUtil += value
@@ -211,9 +207,8 @@ class SmartAgent(CaptureAgent):
     features = {}
     minDistance = min([self.getMazeDistance(gameState.getAgentPosition(self.index), food) for food in self.getEnemyFood(gameState).asList()])
     features["distanceToFood"] = minDistance
-    # features["reverse"] = self.lastAction == lastAction
-    # features["stop"] = lastAction == "Stop"
+    features["reverse"] = lastAction == Directions.REVERSE[gameState.getAgentState(self.index).configuration.direction]
     return features
 
   def features(self):
-    return [("distanceToFood", -1)]
+    return [("distanceToFood", -1), ("reverse", -10)]
