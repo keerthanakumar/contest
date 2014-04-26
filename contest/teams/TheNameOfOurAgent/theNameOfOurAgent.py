@@ -27,10 +27,18 @@ class TheNameOfOurAgent(AgentFactory):
     self.agentIndex = 0
     self.numAgents = 0 # need to change
     self.agents = {}
+    self.queue = [first, second]
 
   def getAgent(self, index):
     if index not in self.agents:
-      self.agents[index] = SmartAgent(index)
+      if len(self.queue):
+        value = self.queue.pop()
+      else:
+        value = "offense"
+      if value == "offense":
+        self.agents[index] = OffenseAgent(index)
+      else:
+        self.agents[index] = DefenseAgent(index)
 
     return self.agents[index]
 
@@ -47,6 +55,28 @@ class SmartAgent(CaptureAgent):
     self.enemyParticles = {}
     self.lastAction = None
 
+  def printParticles(self, gameState, particles):
+    strValue = str(gameState)
+
+    data = strValue.split("\n")
+
+    rows = len(data)
+    cols = len(data[0])
+
+    grid = [['-'] * cols for _ in xrange(rows)]
+
+    for enemyIndex in particles:
+      for pos in particles[enemyIndex]:
+        print rows, cols, "-", pos
+        grid[pos[0]][pos[1]] = particles[enemyIndex][pos]
+
+
+    for x in xrange(rows):
+      val = ""
+      for y in xrange(cols):
+        val += str(grid[x][y])
+      print val
+
   def isTeammate(self, gameState, index):
     return gameState.isOnRedTeam(index) == gameState.isOnRedTeam(self.index)
 
@@ -58,12 +88,16 @@ class SmartAgent(CaptureAgent):
 
   def getPotentialPositions(self, gameState, x, y):
     positions = []
+<<<<<<< HEAD
     x = int(x)
     y = int(y)
+=======
+>>>>>>> 877b5450525ff51471d2cd30ec17601aa34c538b
     for step in self.steps:
       if not gameState.hasWall(x + step[0], y + step[1]):
         positions.append((x + step[0], y + step[1]))
 
+    print x, y, positions
     return positions
 
   def getNextPotentialPositions(self, gameState, x, y):
@@ -95,7 +129,7 @@ class SmartAgent(CaptureAgent):
     for enemyIndex in particles:
       probParticles = util.Counter()
 
-      for x, y in particles[enemyIndex]:
+      for (x, y) in particles[enemyIndex]:
         for (a, b) in self.getPotentialPositions(gameState, x, y):
           probParticles[(a, b)] += particles[enemyIndex][(x, y)]
 
@@ -204,6 +238,7 @@ class SmartAgent(CaptureAgent):
     for feature, weight in agentFeatures:
       if feature not in agentData:
         continue
+      print ">>>", agentData[feature], weight
       score += agentData[feature] * weight
 
     return score
@@ -216,4 +251,70 @@ class SmartAgent(CaptureAgent):
     return features
 
   def features(self):
+<<<<<<< HEAD
     return [("distanceToFood", -20), ("reverse", -10)]
+=======
+    return [("distanceToFood", -1), ("reverse", -10)]
+
+class ReflexAgent(SmartAgent):
+
+  def __init__(self, index, timeForComputing = .1):
+    SmartAgent.__init__(self, index, timeForComputing)
+
+  def getAction(self, gameState):
+    self.enemyParticles = self.distributeParticles(gameState, self.enemyParticles)
+    self.printParticles(gameState, self.enemyParticles)
+    print self.enemyParticles
+    bestScore = -float("inf")
+    bestAction = None
+
+    for action in gameState.getLegalActions(self.index):
+      if action is "Stop":
+        continue
+      score = self.evaluate(gameState, self.enemyParticles, self.lastAction)
+      if score > bestScore:
+        bestAction = action
+        bestScore = score
+
+    print self, bestAction, bestScore
+    return bestAction
+
+class OffenseAgent(ReflexAgent):
+
+  def __init__(self, index, timeForComputing = .1):
+    SmartAgent.__init__(self, index, timeForComputing)
+
+  def featureData(self, gameState, particles, lastAction):
+    features = {}
+    minDistance = min([self.getMazeDistance(gameState.getAgentPosition(self.index), food) for food in self.getEnemyFood(gameState).asList()])
+    features["distanceToFood"] = minDistance
+    return features
+
+  def features(self):
+    return [("distanceToFood", -1)]
+
+class DefenseAgent(ReflexAgent):
+
+  def __init__(self, index, timeForComputing = .1):
+    SmartAgent.__init__(self, index, timeForComputing)
+
+  def featureData(self, gameState, particles, lastAction):
+    features = {}
+
+    minDistance = float("inf")
+
+    for enemyIndex in self.enemyParticles:
+      distance = 0
+      for pos in self.enemyParticles[enemyIndex]:
+        distance += self.getMazeDistance(gameState.getAgentPosition(self.index), pos) * self.enemyParticles[enemyIndex][pos]
+      minDistance = min(minDistance, distance)
+
+    features["distanceToEnemy"] = minDistance
+
+    return features
+
+  def features(self):
+    return [("distanceToEnemy", -1)]
+
+
+>>>>>>> 877b5450525ff51471d2cd30ec17601aa34c538b
