@@ -39,7 +39,7 @@ class SmartAgent(CaptureAgent):
   def __init__(self, index, timeForComputing = .1):
     CaptureAgent.__init__(self, index, timeForComputing)
 
-    self.depth = 1
+    self.depth = 4
     self.numParticles = 10
     self.steps = [(0, 0), (0, 1), (1, 0), (-1, 0), (0, -1)]
 
@@ -130,6 +130,8 @@ class SmartAgent(CaptureAgent):
 
     actions = gameState.getLegalActions(self.index)
     for action in actions:
+      if action == "Stop":
+        continue
       expectation = self.expectimax(gameState.generateSuccessor(self.index, action), self.index, self.enemyParticles, self.depth)
       print action, expectation
       if expectation > bestExpectation:
@@ -181,6 +183,8 @@ class SmartAgent(CaptureAgent):
     # maxUtil = -float("inf")
 
     for action in actions:
+      if action == "Stop":
+        continue
       successor = gameState.generateSuccessor(agentIndex, action)
       value = self.chooseValue(successor, agentIndex, particles, action, depth)
       sumUtil += value
