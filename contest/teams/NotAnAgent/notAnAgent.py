@@ -13,6 +13,7 @@ import random, time, util
 from game import Directions
 import keyboardAgents
 import game
+import math
 from util import nearestPoint
 
 #############
@@ -127,7 +128,7 @@ class ReflexCaptureAgent(CaptureAgent):
     for foodPos in food:
       sum_sq += self.getMazeDistance(position, foodPos) ** 2
 
-    return sum_sq
+    return math.sqrt(sum_sq)
 
   def evaluate(self, gameState, action):
     """
@@ -175,10 +176,17 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
     foodDistance = self.optimalFoodDistance(successor, True, successor.getAgentPosition(self.index))
     features['foodDistance'] = foodDistance
 
+
+    enemies = [successor.getAgentState(i) for i in self.getOpponents(successor)]
+    invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
+    if len(invaders) > 0:
+      dists = [self.getMazeDistance(myPos, a.getPosition()) for a in invaders]
+      features['invaderDistance'] = min(dists)
+
     return features
 
   def getWeights(self, gameState, action):
-    return {'successorScore': 100, 'distanceToFood': -2, 'foodDistance': -1}
+    return {'successorScore': 100, 'distanceToFood': -2, 'foodDistance': -1, 'invaderDistance': 4}
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
   """
@@ -216,4 +224,4 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     return features
 
   def getWeights(self, gameState, action):
-    return {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -10, 'stop': -100, 'reverse': -2, 'foodDistance': -3}
+    return {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -100, 'stop': -100, 'reverse': -2, 'foodDistance': -3}
