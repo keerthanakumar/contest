@@ -26,29 +26,40 @@ class TheNameOfOurAgent(AgentFactory):
     AgentFactory.__init__(self, isRed)
     self.agentIndex = 0
     self.numAgents = 0 # need to change
+    self.agents = {}
 
   def getAgent(self, index):
-    return SmartAgent(index)
+    if index not in self.agents:
+      self.agents[index] = SmartAgent(index)
+
+    return self.agents[index]
 
 class SmartAgent(CaptureAgent):
 
   def __init__(self, index, timeForComputing = .1):
     CaptureAgent.__init__(self, index, timeForComputing)
 
-    self.depth = 4
-    self.numParticles = 20
+    self.depth = 1
+    self.numParticles = 10
     self.steps = [(0, 0), (0, 1), (1, 0), (-1, 0), (0, -1)]
 
     self.teammateLocations = {}
     self.enemyParticles = {}
+    self.lastAction = None
 
   def isTeammate(self, gameState, index):
     return gameState.isOnRedTeam(index) == gameState.isOnRedTeam(self.index)
 
+  def getEnemyFood(self, gameState):
+    if gameState.isOnRedTeam(self.index):
+      return gameState.getBlueFood()
+    else:
+      return gameState.getRedFood()
 
   def getPotentialPositions(self, gameState, x, y):
     positions = []
-
+    x = int(x)
+    y = int(y)
     for step in self.steps:
       if not gameState.hasWall(x + step[0], y + step[1]):
         positions.append((x + step[0], y + step[1]))
@@ -120,18 +131,23 @@ class SmartAgent(CaptureAgent):
 
     actions = gameState.getLegalActions(self.index)
     for action in actions:
+      if action == "Stop":
+        continue
       expectation = self.expectimax(gameState.generateSuccessor(self.index, action), self.index, self.enemyParticles, self.depth)
-
+      print action, expectation
       if expectation > bestExpectation:
         bestAction = action
+        bestExpectation = expectation
 
+    print ""
+    self.lastAction = bestAction
     return bestAction # Maybe change to default at stop
 
   # Expectimax Logic
   def expectimax(self, gameState, agentIndex, particles, depth):
-    return self.expectValue(gameState, agentIndex, particles, gameState.getLegalActions(agentIndex), depth)
+    return self.expectValue(gameState, agentIndex, particles, gameState.getLegalActions(agentIndex), None, depth)
 
-  def chooseValue(self, gameState, agentIndex, particles, depth):
+  def chooseValue(self, gameState, agentIndex, particles, lastAction, depth):
     newParticles = particles
 
     if not self.isTeammate(gameState, agentIndex):
@@ -142,39 +158,46 @@ class SmartAgent(CaptureAgent):
 
     if self.isTeammate(gameState, newIndex):
       actions = gameState.getLegalActions(newIndex)
-      return self.expectValue(gameState, newIndex, newParticles, actions, newDepth)
+      return self.expectValue(gameState, newIndex, newParticles, actions, lastAction, newDepth)
     else:
       actions = particles[newIndex].keys()
-      return self.minValue(gameState, newIndex, newParticles, actions, newDepth)
+      return self.minValue(gameState, newIndex, newParticles, actions, lastAction, newDepth)
 
 
-  def minValue(self, gameState, agentIndex, particles, actions, depth):
+  def minValue(self, gameState, agentIndex, particles, actions, lastAction, depth):
     if depth == 0:
-      return self.evaluate(gameState, particles)
+      return self.evaluate(gameState, particles, lastAction)
 
     minUtil = float("inf")
 
     for action in actions:
-      minUtil = min(minUtil, self.chooseValue(gameState, agentIndex, particles, depth))
+      minUtil = min(minUtil, self.chooseValue(gameState, agentIndex, particles, lastAction, depth))
 
     return minUtil
 
-  def expectValue(self, gameState, agentIndex, particles, actions, depth):
+  def expectValue(self, gameState, agentIndex, particles, actions, lastAction, depth):
     if depth == 0:
-      return self.evaluate(gameState, particles)
+      return self.evaluate(gameState, particles, lastAction)
 
     sumUtil = 0.0
     numActions = 0.0
+    # maxUtil = -float("inf")
 
     for action in actions:
-      sumUtil += self.chooseValue(gameState, agentIndex, particles, depth)
+      if action == "Stop":
+        continue
+      successor = gameState.generateSuccessor(agentIndex, action)
+      value = self.chooseValue(successor, agentIndex, particles, action, depth)
+      sumUtil += value
       numActions += 1.0
+      # maxUtil = max(maxUtil, value)
 
     return 0 if numActions == 0.0 else sumUtil / numActions
+    # return maxUtil
 
-  def evaluate(self, gameState, particles):
+  def evaluate(self, gameState, particles, lastAction):
     agentFeatures = self.features()
-    agentData = self.featureData(gameState, particles)
+    agentData = self.featureData(gameState, particles, lastAction)
     score = 0.0
 
     for feature, weight in agentFeatures:
@@ -184,8 +207,13 @@ class SmartAgent(CaptureAgent):
 
     return score
 
-  def featureData(self, gameState, particles):
-    return {}
+  def featureData(self, gameState, particles, lastAction):
+    features = {}
+    minDistance = min([self.getMazeDistance(gameState.getAgentPosition(self.index), food) for food in self.getEnemyFood(gameState).asList()])
+    features["distanceToFood"] = minDistance
+    # features["reverse"] = self.lastAction == lastAction
+    # features["stop"] = lastAction == "Stop"
+    return features
 
   def features(self):
-    return {}
+    return [("distanceToFood", -1)]
