@@ -133,7 +133,8 @@ class SmartAgent(CaptureAgent):
     for action in actions:
       if action == "Stop":
         continue
-      expectation = self.expectimax(gameState.generateSuccessor(self.index, action), self.index, self.enemyParticles, self.depth)
+      print self.enemyParticles
+      expectation = self.expectimax(gameState.generateSuccessor(self.index, action), (self.index+1)%gameState.getNumAgents(), self.enemyParticles, action, self.depth)
       print action, expectation
       if expectation > bestExpectation:
         bestAction = action
@@ -144,8 +145,8 @@ class SmartAgent(CaptureAgent):
     return bestAction # Maybe change to default at stop
 
   # Expectimax Logic
-  def expectimax(self, gameState, agentIndex, particles, depth):
-    return self.expectValue(gameState, agentIndex, particles, gameState.getLegalActions(agentIndex), None, depth)
+  def expectimax(self, gameState, agentIndex, particles, lastAction, depth):
+    return self.minValue(gameState, agentIndex, particles, particles[agentIndex].keys(), lastAction, depth)
 
   def chooseValue(self, gameState, agentIndex, particles, lastAction, depth):
     newParticles = particles
@@ -215,4 +216,4 @@ class SmartAgent(CaptureAgent):
     return features
 
   def features(self):
-    return [("distanceToFood", -1), ("reverse", -10)]
+    return [("distanceToFood", -20), ("reverse", -10)]
