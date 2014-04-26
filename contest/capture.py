@@ -83,7 +83,6 @@ class GameState:
     """
     Returns the legal actions for the agent specified.
     """
-    print "getLegalActions", agentIndex
     return AgentRules.getLegalActions( self, agentIndex )
 
   def generateSuccessor( self, agentIndex, action):
@@ -413,11 +412,8 @@ class AgentRules:
     """
     Returns a list of legal actions (which are both possible & allowed)
     """
-    print "AgentRules.getLegalActions", agentIndex
     agentState = state.getAgentState(agentIndex)
-    print "AgentState:", agentState
     conf = agentState.configuration
-    print "Configuation:", conf
     possibleActions = Actions.getPossibleActions( conf, state.data.layout.walls )
     return AgentRules.filterForAllowedActions( agentState, possibleActions)
   getLegalActions = staticmethod( getLegalActions )
