@@ -212,7 +212,7 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
     features['numInvaders'] = len(invaders)
     if len(enemies) > 0:
-      dists = [self.getMazeDistance(myPos, a.getPosition()) for a in enemies]
+      dists = [self.getMazeDistance(myPos, a.getPosition()) for a in enemies if a.getPosition() != None]
       features['invaderDistance'] = min(dists)
 
     if action == Directions.STOP: features['stop'] = 1
