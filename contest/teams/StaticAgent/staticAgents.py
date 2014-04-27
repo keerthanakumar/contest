@@ -13,6 +13,7 @@ import random, time, util
 from game import Directions
 import keyboardAgents
 import game
+import math
 from util import nearestPoint
 
 #############
@@ -29,7 +30,6 @@ class StaticAgents(AgentFactory):
     self.rest = rest
 
   def getAgent(self, index):
-    print index, len(self.agents)
     if len(self.agents) > 0:
       return self.choose(self.agents.pop(0), index)
     else:
@@ -87,7 +87,7 @@ class ReflexCaptureAgent(CaptureAgent):
   def registerInitialState(self, gameState):
     CaptureAgent.registerInitialState(self, gameState)
     self.validPositions = gameState.getWalls().asList(False)
-    self.enemyIndices = self.getOpponents()
+    self.enemyIndices = self.getOpponents(gameState)
     self.numParticles = 100
     self.starts = {}
     self.steps = [(0, 0), (0, 1), (1, 0), (0, -1), (-1, 0)]
@@ -98,7 +98,7 @@ class ReflexCaptureAgent(CaptureAgent):
 
     self.enemyParticles = {}
 
-    for index in enemyIndices:
+    for index in self.enemyIndices:
       self.enemyParticles[index] = util.Counter()
       self.enemyParticles[index][self.starts[index]] = self.numParticles
  
@@ -161,7 +161,7 @@ class ReflexCaptureAgent(CaptureAgent):
         self.enemyParticles[enemyIndex] = util.Counter()
         self.enemyParticles[enemyIndex][enemyPosition] = self.numParticles
 
-    if lastFood is not None:
+    if self.lastFood is not None:
       currentFood = self.getFoodYouAreDefending(gameState)
       eatenFood = []
 
@@ -179,6 +179,26 @@ class ReflexCaptureAgent(CaptureAgent):
 
         self.enemyParticles[indices[index]] = util.Counter()
         self.enemyParticles[indices[index]][food] = self.numParticles
+
+  def optimalFoodDistance(self, gameState, attack, position):
+    food = []
+    if attack:
+      if gameState.isOnRedTeam(self.index):
+        food = gameState.getBlueFood().asList()
+      else:
+        food = gameState.getRedFood().asList()
+    else:
+      if gameState.isOnRedTeam(self.index):
+        food = gameState.getRedFood().asList()
+      else:
+        food = gameState.getBlueFood().asList()
+
+    sum_sq = 0.0
+    for foodPos in food:
+      sum_sq += self.getMazeDistance(position, foodPos) ** 2
+
+    return math.sqrt(sum_sq)
+
 
   def chooseAction(self, gameState):
     """
