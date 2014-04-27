@@ -315,6 +315,3 @@ class DefenseAgent(ReflexAgent):
 
   def features(self):
     return [("distanceToEnemy", -1)]
-
-
->>>>>>> 877b5450525ff51471d2cd30ec17601aa34c538b
