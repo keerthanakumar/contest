@@ -285,7 +285,9 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     if len(enemies) > 0:
       dists = [self.getMazeDistance(myPos, a.getPosition()) for a in enemies if a.getPosition() != None]
       if len(dists) > 0:
-        features['invaderDistance'] = min(dists)
+        minDist = min(dists)
+        if minDist <= 5:
+          features["invaderDistance"] = minDist ** 2
 
     if action == Directions.STOP: features['stop'] = 1
     rev = Directions.REVERSE[gameState.getAgentState(self.index).configuration.direction]
@@ -298,5 +300,5 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     return features
 
   def getWeights(self, gameState, action):
-    return {'numInvaders': -1000, 'onDefense': 100, 'stop': -100, 'reverse': -2, 'invaderDistance': -100, 'foodDistance': -3}
+    return {'numInvaders': -1000, 'onDefense': 100, 'stop': -100, 'invaderDistance': -100, 'foodDistance': -3}
 
