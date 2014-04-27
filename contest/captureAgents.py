@@ -90,6 +90,7 @@ class CaptureAgent(Agent):
     between each pair of positions, so your agents can use:
     self.distancer.getDistance(p1, p2)
     """
+    print "AJKSDFQOWITEFLUJAWEOILKAJERGIALKWEGJAOIKLSGDJASDGLK"
     self.red = gameState.isOnRedTeam(self.index)
     self.distancer = distanceCalculator.Distancer(gameState.data.layout)
     

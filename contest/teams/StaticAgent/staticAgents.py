@@ -13,25 +13,14 @@ import random, time, util
 from game import Directions
 import keyboardAgents
 import game
-import math
-import random
 from util import nearestPoint
 
 #############
 # FACTORIES #
 #############
 
-steps = [(0, 1), (1, 0), (-1, 0), (0, -1)]
-V = []
-E = []
-G = (V, E)
-
-posMap = {}
-vertexMap = {}
-edgeMap = {}
-
 NUM_KEYBOARD_AGENTS = 0
-class NotAnAgent(AgentFactory):
+class StaticAgents(AgentFactory):
   "Returns one keyboard agent and offensive reflex agents"
 
   def __init__(self, isRed, first='offense', second='defense', rest='offense'):
@@ -40,6 +29,7 @@ class NotAnAgent(AgentFactory):
     self.rest = rest
 
   def getAgent(self, index):
+    print index, len(self.agents)
     if len(self.agents) > 0:
       return self.choose(self.agents.pop(0), index)
     else:
@@ -94,110 +84,119 @@ class ReflexCaptureAgent(CaptureAgent):
   A base class for reflex agents that chooses score-maximizing actions
   """
 
-  def getPotentialMoves(self, gameState, x, y):
-    moves = []
-
-    for step in steps:
-      r = x + step[0]
-      c = y + step[1]
-      if not gameState.hasWall(r, c):
-        moves.append((r, c))
-
-    return moves
-
-  def dfsToVertex(self, moveMap, pos, seen):
-    seen.append(pos)
-    if pos in V:
-      return [pos]
-
-    if pos in moveMap:
-      return []
-
-    result = []
-    for move in moveMap[pos]:
-      if move not in seen:
-        result += self.dfsToVertex(moveMap, move, seen)
-
-    return result
-
   def registerInitialState(self, gameState):
     CaptureAgent.registerInitialState(self, gameState)
-    gameStr = str(gameState)
-    # rows = gameStr.count("\n") + 1
-    # cols = (len(gameStr) - (rows - 1)) / rows
-    rows = 30
-    cols = 14
+    self.validPositions = gameState.getWalls().asList(False)
+    self.enemyIndices = self.getOpponents()
+    self.numParticles = 100
+    self.starts = {}
+    self.steps = [(0, 0), (0, 1), (1, 0), (0, -1), (-1, 0)]
+    self.lastFood = None
 
-    moveMap = {}
+    for index in gameState.getRedTeamIndices() + gameState.getBlueTeamIndices():
+      self.starts[index] = gameState.getInitialAgentPosition(index)
 
-    print rows, cols
-    print gameStr
-    for x in xrange(rows):
-      for y in xrange(cols):
-        print x, y
-        if not gameState.hasWall(x, y):
-          moveMap[(x, y)] = self.getPotentialMoves(gameState, x, y)
+    self.enemyParticles = {}
 
-    for (x, y) in moveMap:
-      length = len(moveMap[(x, y)])
-      if length != 2:
-        V.append((x, y))
+    for index in enemyIndices:
+      self.enemyParticles[index] = util.Counter()
+      self.enemyParticles[index][self.starts[index]] = self.numParticles
+ 
+  def getPotentialPositions(self, gameState, x, y):
+    positions = []
 
-    for (x, y) in moveMap:
-      if (x, y) not in V:
-        E.append(self.dfsToVertex(moveMap, (x, y), []))
+    for step in self.steps:
+      if not gameState.hasWall(x + step[0], y + step[1]):
+        positions.append((x + step[0], y + step[1]))
 
+    return positions
+
+  def distributeParticles(self, gameState, particles):
+    newEnemyParticles = {}
+
+    for enemyIndex in particles:
+      probParticles = util.Counter()
+
+      for (x, y) in particles[enemyIndex]:
+        for (a, b) in self.getPotentialPositions(gameState, x, y):
+          probParticles[(a, b)] += particles[enemyIndex][(x, y)]
+
+      samples = util.nSample(probParticles.values(), probParticles.keys(), self.numParticles)
+      newEnemyParticles[enemyIndex] = util.Counter()
+
+      for sample in samples:
+        if sample not in newEnemyParticles[enemyIndex]:
+          newEnemyParticles[enemyIndex][sample] = 0
+        newEnemyParticles[enemyIndex][sample] += 1
+
+    return newEnemyParticles
+
+  # this could be buggy because one distribution could be really wild with another one really accurate and this could ruin the accurate one
+  def closestEnemyIndices(self, position):
+    enemyIndices = []
+
+    for enemyIndex in self.enemyParticles:
+      dist = 0.0
+
+      for position in self.enemyParticles[enemyIndex]:
+        dist += self.getMazeDistance(gameState.getAgentPosition(self.index), position) ** 2
+
+      enemyIndices.append((enemyIndex, dist))
+
+    sortedEnemyIndices = sorted(enemyIndices, key=lambda x: x[1])
+
+    return [index for index, dist in sortedEnemyIndices]
+
+  def getEnemyLocationWeights(self, gameState, enemyIndex):
+    return self.enemyParticles[enemyIndex]
+
+  def updateParticles(self, gameState):
+    self.enemyParticles = self.distributeParticles(gameState, self.enemyParticles)
+
+    for enemyIndex in self.enemyParticles:
+      enemyState = gameState.getAgentState(enemyIndex)
+      enemyPosition = enemyState.getPosition()
+
+      if enemyPosition is not None:
+        self.enemyParticles[enemyIndex] = util.Counter()
+        self.enemyParticles[enemyIndex][enemyPosition] = self.numParticles
+
+    if lastFood is not None:
+      currentFood = self.getFoodYouAreDefending(gameState)
+      eatenFood = []
+
+      for food in self.lastFood:
+        if food not in currentFood:
+          eatenFood.append(food)
+
+      chosenIndices = []
+      for food in eatenFood:
+        indices = self.closestEnemyIndices(food)
+        index = 0
+        
+        while indices[index] in chosenIndices:
+          index += 1
+
+        self.enemyParticles[indices[index]] = util.Counter()
+        self.enemyParticles[indices[index]][food] = self.numParticles
 
   def chooseAction(self, gameState):
     """
     Picks among the actions with the highest Q(s,a).
     """
+    self.updateParticles(gameState)
     actions = gameState.getLegalActions(self.index)
 
     # You can profile your evaluation time by uncommenting these lines
     # start = time.time()
-
-    weights = [(action, self.getFeatures(gameState, action)) for action in actions]
-    maxes = {}
-
-    print "=-----------------------------="
-    print self
-    print weights
-
-    for action, weighting in weights:
-      for key in weighting:
-        weighting[key] *= 1.0
-        if key not in maxes:
-          maxes[key] = weighting[key]
-        else:
-          maxes[key] = max(maxes[key], weighting[key])
-
-    for action, weighting in weights:
-      for key in weighting:
-        weighting[key] /=  abs(maxes[key]) if maxes[key] != 0 else 1
-
-    print weights
-    print "=-----------------------------="
-
-    weightDict = self.getWeights(gameState, None)
-    values = [(feature[0], feature[1] * weightDict) for feature in weights]
-
-    # values = [self.evaluate(gameState, a) for a in actions]
+    values = [self.evaluate(gameState, a) for a in actions]
     # print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
 
-    # maxValue = max(values)
-    # bestActions = [a for a, v in zip(actions, values) if v == maxValue]
+    maxValue = max(values)
+    bestActions = [a for a, v in zip(actions, values) if v == maxValue]
 
-    random.shuffle(values)
-    bestAction = None
-    bestValue = -float("inf")
-
-    for action, value in values:
-      if value > bestValue:
-        bestAction = action
-        bestValue = value
-
-    return bestAction
+    lastFood = self.getFoodYouAreDefending(gameState)
+    return random.choice(bestActions)
 
   def getSuccessor(self, gameState, action):
     """
@@ -210,50 +209,6 @@ class ReflexCaptureAgent(CaptureAgent):
       return successor.generateSuccessor(self.index, action)
     else:
       return successor
-
-  def optimalFoodDistance(self, gameState, attack, position):
-    food = []
-    if attack:
-      if gameState.isOnRedTeam(self.index):
-        food = gameState.getBlueFood().asList()
-      else:
-        food = gameState.getRedFood().asList()
-    else:
-      if gameState.isOnRedTeam(self.index):
-        food = gameState.getRedFood().asList()
-      else:
-        food = gameState.getBlueFood().asList()
-
-    sum_sq = 0.0
-    for foodPos in food:
-      sum_sq += self.getMazeDistance(position, foodPos) ** 2
-
-    return math.sqrt(sum_sq)
-
-  def getMSTWeight(self, positions):
-    points = positions[:]
-    weight = 0.0
-
-    randomPoint = random.choice(points)
-    currPoint = randomPoint
-    points.remove(randomPoint)
-
-    while len(points):
-      pointDists = [(point, self.getMazeDistance(currPoint, point)) for point in points if point]
-
-      minPoint = None
-      minDist = float("inf")
-
-      for point, dist in pointDists:
-        if dist < minDist:
-          minDist = dist
-          minPoint = point
-
-      weight += minDist
-      currPoint = minPoint
-      points.remove(minPoint)
-
-    return weight
 
   def evaluate(self, gameState, action):
     """
@@ -285,6 +240,10 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
   we give you to get an idea of what an offensive agent might look like,
   but it is by no means the best or only way to build an offensive agent.
   """
+
+  def connectedComponents(self, gameState, points):
+    return 0
+
   def getFeatures(self, gameState, action):
     features = util.Counter()
     successor = self.getSuccessor(gameState, action)
@@ -297,38 +256,29 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
       minDistance = min([self.getMazeDistance(myPos, food) for food in foodList])
       features['distanceToFood'] = minDistance
 
+    """ NEW FEATURES """
 
-    """OUR CODE"""
-    food = self.getFood(successor).asList()
     enemies = [successor.getAgentState(i) for i in self.getOpponents(successor)]
-    enemyPositions = [enemy.getPosition() for enemy in enemies if enemy.getPosition() != None and not enemy.isPacman]
 
-    if len(enemyPositions) > 0:
-      features["enemyDistance"] = min([self.getMazeDistance(myPos, enemyPosition) for enemyPosition in enemyPositions])
+    features["foodCount"] = len(foodList)
+    features["foodComponents"] = self.connectedComponents(successor, [myPos] + foodList)
+    features["scaredGhostDist"] = 0
 
-      scaredTimer = -1
-      for enemyPosition in enemyPositions:
-        dist = self.getMazeDistance(myPos, enemyPosition)
-        if dist == features["enemyDistance"]:
-          scaredTimer = 
+    for enemy in enemies:
+      pos = enemy.getPosition()
 
+      if pos == None or enemy.isPacman:
+        continue
 
-    features["dead"] = 0
+      dist = self.getMazeDistance(myPos, pos)
+      scaredDist = dist - enemy.scaredTimer
 
-    nextSuccessors = [self.getSuccessor(successor, action) for action in successor.getLegalActions(self.index)]
-    for index in self.getTeam(gameState):
-      for nextSuccessor in nextSuccessors:
-        if myPos == nextSuccessor.getInitialAgentPosition(index):
-          features["dead"] = 1
-          break
-
-    features["foodMST"] = self.getMSTWeight(food + [myPos])
-    features['stop'] = myPos == successor.getAgentPosition(self.index)
+      features["scaredGhostDist"] = max(features["scaredGhostDist"], scaredDist)
 
     return features
 
   def getWeights(self, gameState, action):
-    return {'dead': -10000, 'successorScore': 100, 'foodMST': -2, 'distanceToFood': -10, 'enemyDistance': 1, 'stop': -100000}
+    return {'successorScore': 100, 'distanceToFood': -1, 'foodCount': -1, 'tooClose': -1000, 'scaredGhostDist': 2}
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
   """
@@ -353,18 +303,16 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     enemies = [successor.getAgentState(i) for i in self.getOpponents(successor)]
     invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
     features['numInvaders'] = len(invaders)
-    if len(enemies) > 0:
-      dists = [self.getMazeDistance(myPos, a.getPosition()) for a in enemies if a.getPosition() != None]
-      if len(dists) > 0:
-        minDist = min(dists)
-        if minDist <= 5:
-          features["invaderDistance"] = minDist ** 2
+    if len(invaders) > 0:
+      dists = [self.getMazeDistance(myPos, a.getPosition()) for a in invaders]
+      features['invaderDistance'] = min(dists)
 
     if action == Directions.STOP: features['stop'] = 1
     rev = Directions.REVERSE[gameState.getAgentState(self.index).configuration.direction]
     if action == rev: features['reverse'] = 1
 
-    """OUR CODE"""
+    """ NEW FEATURES """
+
     foodDistance = self.optimalFoodDistance(successor, False, successor.getAgentPosition(self.index))
     features['foodDistance'] = foodDistance
 
