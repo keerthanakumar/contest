@@ -1,0 +1,9 @@
+
+    if valid(i, j, leni, lenj):
+        if pixels[i][j] == 0:
+    if valid(i, j, leni, lenj):
+        if pixels[i][j] == 0:
+            pixels[i][j] = 1
+            dfs(pixels, i, j)
+            pixels[i][j] = 1
+            dfs(pixels, i, j)

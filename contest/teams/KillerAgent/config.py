@@ -36,10 +36,10 @@ Settings:
 """
 
 # Alpha-Numeric only
-TeamName = ''
+TeamName = 'KillerAgents'
 
 # Filename.FactoryClassName (CASE-sensitive)
-AgentFactory = 'baselineAgents.BaselineAgents'
+AgentFactory = 'killerAgents.KillerAgents'
 
 Partners = ['Jaime Rivera', 'Keerthana Kumar']
 

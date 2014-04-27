@@ -16,6 +16,7 @@ import game
 import math
 import random
 from util import nearestPoint
+import math
 
 #############
 # FACTORIES #

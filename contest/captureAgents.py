@@ -17,7 +17,6 @@ import util
 
 class AgentFactory:
   "Generates agents for a side"
-
   def __init__(self, isRed, **args):
     self.isRed = isRed
 
