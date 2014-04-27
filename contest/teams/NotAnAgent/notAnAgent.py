@@ -14,6 +14,7 @@ from game import Directions
 import keyboardAgents
 import game
 import math
+import random
 from util import nearestPoint
 
 #############
@@ -91,13 +92,48 @@ class ReflexCaptureAgent(CaptureAgent):
 
     # You can profile your evaluation time by uncommenting these lines
     # start = time.time()
-    values = [self.evaluate(gameState, a) for a in actions]
+
+    weights = [(action, self.getFeatures(gameState, action)) for action in actions]
+    maxes = {}
+
+    print "=-----------------------------="
+    print self
+    print weights
+
+    for action, weighting in weights:
+      for key in weighting:
+        weighting[key] *= 1.0
+        if key not in maxes:
+          maxes[key] = weighting[key]
+        else:
+          maxes[key] = max(maxes[key], weighting[key])
+
+    for action, weighting in weights:
+      for key in weighting:
+        weighting[key] /=  abs(maxes[key]) if maxes[key] != 0 else 1
+
+    print weights
+    print "=-----------------------------="
+
+    weightDict = self.getWeights(gameState, None)
+    values = [(feature[0], feature[1] * weightDict) for feature in weights]
+
+    # values = [self.evaluate(gameState, a) for a in actions]
     # print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
 
-    maxValue = max(values)
-    bestActions = [a for a, v in zip(actions, values) if v == maxValue]
+    # maxValue = max(values)
+    # bestActions = [a for a, v in zip(actions, values) if v == maxValue]
 
-    return random.choice(bestActions)
+    random.shuffle(values)
+    bestAction = None
+    bestValue = -float("inf")
+
+    for action, value in values:
+      if value > bestValue:
+        bestAction = action
+        bestValue = value
+
+    return bestAction
 
   def getSuccessor(self, gameState, action):
     """
@@ -129,6 +165,31 @@ class ReflexCaptureAgent(CaptureAgent):
       sum_sq += self.getMazeDistance(position, foodPos) ** 2
 
     return math.sqrt(sum_sq)
+
+  def getMSTWeight(self, positions):
+    points = positions[:]
+    weight = 0.0
+
+    randomPoint = random.choice(points)
+    currPoint = randomPoint
+    points.remove(randomPoint)
+
+    while len(points):
+      pointDists = [(point, self.getMazeDistance(currPoint, point)) for point in points if point]
+
+      minPoint = None
+      minDist = float("inf")
+
+      for point, dist in pointDists:
+        if dist < minDist:
+          minDist = dist
+          minPoint = point
+
+      weight += minDist
+      currPoint = minPoint
+      points.remove(minPoint)
+
+    return weight
 
   def evaluate(self, gameState, action):
     """
@@ -173,20 +234,30 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
       features['distanceToFood'] = minDistance
 
 
-    foodDistance = self.optimalFoodDistance(successor, True, successor.getAgentPosition(self.index))
-    features['foodDistance'] = foodDistance
-
-
+    """OUR CODE"""
+    food = self.getFood(successor).asList()
     enemies = [successor.getAgentState(i) for i in self.getOpponents(successor)]
-    invaders = [a for a in enemies if a.isPacman and a.getPosition() != None]
-    if len(invaders) > 0:
-      dists = [self.getMazeDistance(myPos, a.getPosition()) for a in invaders]
-      features['invaderDistance'] = min(dists)
+    enemyPositions = [enemy.getPosition() for enemy in enemies if enemy.getPosition() != None and not enemy.isPacman]
+
+    if len(enemyPositions) > 0:
+      features["enemyDistance"] = min([self.getMazeDistance(myPos, enemyPosition) for enemyPosition in enemyPositions])
+
+    features["dead"] = 0
+
+    nextSuccessors = [self.getSuccessor(successor, action) for action in successor.getLegalActions(self.index)]
+    for index in self.getTeam(gameState):
+      for nextSuccessor in nextSuccessors:
+        if myPos == nextSuccessor.getInitialAgentPosition(index):
+          features["dead"] = 1
+          break
+
+    features["foodMST"] = self.getMSTWeight(food + [myPos])
+    features['stop'] = myPos == successor.getAgentPosition(self.index)
 
     return features
 
   def getWeights(self, gameState, action):
-    return {'successorScore': 100, 'distanceToFood': -25, 'foodDistance': -1, 'invaderDistance': 10}
+    return {'dead': -10000, 'successorScore': 100, 'foodMST': -2, 'distanceToFood': -10, 'enemyDistance': 1, 'stop': -100000}
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
   """
@@ -220,9 +291,12 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     rev = Directions.REVERSE[gameState.getAgentState(self.index).configuration.direction]
     if action == rev: features['reverse'] = 1
 
+    """OUR CODE"""
     foodDistance = self.optimalFoodDistance(successor, False, successor.getAgentPosition(self.index))
     features['foodDistance'] = foodDistance
+
     return features
 
   def getWeights(self, gameState, action):
-    return {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -100, 'stop': -100, 'reverse': -2, 'foodDistance': -3}
+    return {'numInvaders': -1000, 'onDefense': 100, 'stop': -100, 'reverse': -2, 'invaderDistance': -100, 'foodDistance': -3}
+
