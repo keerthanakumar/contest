@@ -36,12 +36,13 @@ Settings:
 """
 
 # Alpha-Numeric only
-TeamName = 'BaselineAgents'
+TeamName = 'StaticAgents'
 
 # Filename.FactoryClassName (CASE-sensitive)
 AgentFactory = 'staticAgents.StaticAgents'
 
-Partners = ['Static Staff']
+Partners = ['Jaime Rivera','Keerthana Kumar']
+
 
 AgentArgs = {'first':'offense', 'second':'defense'}
 

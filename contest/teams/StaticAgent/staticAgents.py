@@ -106,8 +106,8 @@ class ReflexCaptureAgent(CaptureAgent):
     positions = []
 
     for step in self.steps:
-      if not gameState.hasWall(x + step[0], y + step[1]):
-        positions.append((x + step[0], y + step[1]))
+      if not gameState.hasWall(int(x + step[0]), int(y + step[1])):
+        positions.append((int(x + step[0]), int(y + step[1])))
 
     return positions
 
@@ -339,5 +339,5 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     return features
 
   def getWeights(self, gameState, action):
-    return {'numInvaders': -1000, 'onDefense': 100, 'stop': -100, 'invaderDistance': -100, 'foodDistance': -3}
+    return {'numInvaders': -1000, 'onDefense': 100, 'stop': -100, 'invaderDistance': -500, 'foodDistance': -3}
 
