@@ -100,6 +100,7 @@ class ReflexCaptureAgent(CaptureAgent):
 
     self.lastFood = None
     self.lastPositions = {}
+    self.mostDamagingEnemy = None
 
     if len(validPositions) == 0:
       # All positions are those that are not walls
@@ -109,6 +110,25 @@ class ReflexCaptureAgent(CaptureAgent):
       for enemyIndex in self.getOpponents(gameState):
         self.establishLocation(enemyIndex, gameState.getInitialAgentPosition(enemyIndex))
 
+  def getFoodToReach(self, teamPos, enemyPos, food):
+    foodReach = {}
+
+    for pos in food.asList():
+      foodReach[pos] = self.getMazeDistance(teamPos, pos) - self.getMazeDistance(enemyPos, pos)
+
+    return foodReach
+
+  def onOurSide(self, gameState, position):
+    if self.red:
+      return gameState.isRed(position)
+    else:
+      return not gameState.isRed(position)
+
+  def impossiblePositionBelief(self, gameState, enemyIndex, position):
+    isPacman = gameState.getAgentState(enemyIndex).isPacman
+    onSide = self.onOurSide(gameState, position)
+    return (isPacman and not onSide) or (not isPacman and onSide)
+
   def initializeUniformly(self, enemyIndex, gameState):
     global beliefs
     global validPositions
@@ -116,8 +136,10 @@ class ReflexCaptureAgent(CaptureAgent):
 
     team = [gameState.getAgentPosition(index) for index in self.getTeam(gameState)]
     newBelief = util.Counter()
+    enemyPacman = gameState.getAgentState(enemyIndex).isPacman
+
     for position in validPositions:
-      invalid = self.inRangeOfAny(team, position, SIGHT_RANGE)
+      invalid = self.impossiblePositionBelief(gameState, enemyIndex, position) or self.inRangeOfAny(team, position, SIGHT_RANGE)
 
       if not invalid:
         newBelief[position] = 1.0 / len(validPositions)
@@ -217,7 +239,7 @@ class ReflexCaptureAgent(CaptureAgent):
 
         for position in beliefs[enemyIndex]:
 
-          if self.inRangeOfAny(team, position, SIGHT_RANGE): # buggy af
+          if self.impossiblePositionBelief(gameState, enemyIndex, position) or self.inRangeOfAny(team, position, SIGHT_RANGE):
             continue
 
           trueDistance = util.manhattanDistance(myPos, position)
@@ -272,10 +294,10 @@ class ReflexCaptureAgent(CaptureAgent):
         if beliefs[enemyIndex][oldPos] == 0.0:
           continue
 
-        newPositions = self.getNextPositions(gameState, oldPos) # Use legal neighbors?
+        newPositions = self.getNextPositions(gameState, oldPos)
 
         for newPos in newPositions:
-          if newPos in validPositions:# or self.inRangeOfAny(team, newPos, SIGHT_RANGE):
+          if newPos in validPositions or self.impossiblePositionBelief(gameState, enemyIndex, newPos) or self.inRangeOfAny(team, newPos, SIGHT_RANGE):
             if newPos not in newBeliefs[enemyIndex]:
               newBeliefs[enemyIndex][newPos] = 0.0
 
@@ -308,8 +330,13 @@ class ReflexCaptureAgent(CaptureAgent):
       else:
         distributions.append(None)
 
-    for foodDist in self.foodDistributions:
-      distributions.append(self.foodDistributions[foodDist])
+    if self.mostDamagingEnemy is not None:
+      worstEnemy = util.Counter()
+      worstEnemy[self.mostDamagingEnemy] = 1.0
+      distributions.append(worstEnemy)
+
+    # for foodDist in self.foodDistributions:
+    #   distributions.append(self.foodDistributions[foodDist])
 
     return distributions
 
@@ -356,6 +383,22 @@ class ReflexCaptureAgent(CaptureAgent):
     positions = [pos for pos in dist if dist[pos] == maxima]
     return positions[0]
 
+  def getMSTWeight(self, points):
+    weight = 0.0
+    node = points[0]
+
+    while len(points) > 1:
+      points.remove(node)
+
+      pointDists = [self.getMazeDistance(node, point) for point in points]
+      bestDist = min(pointDists)
+      bestPoints = [point for point in points if self.getMazeDistance(node, point) == bestDist]
+
+      weight += bestDist
+      node = bestPoints[0]
+
+    return weight
+
   def chooseAction(self, gameState):
     """
     Picks among the actions with the highest Q(s,a).
@@ -363,23 +406,22 @@ class ReflexCaptureAgent(CaptureAgent):
     self.elapseTime(gameState)
     self.observe(gameState)
     self.setFoodDistanceDistribution(gameState)
+
     actions = gameState.getLegalActions(self.index)
 
     # You can profile your evaluation time by uncommenting these lines
     start = time.time()
     values = [self.evaluate(gameState, a) for a in actions]
-    # print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
+    print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
 
     maxValue = max(values)
     bestActions = [a for a, v in zip(actions, values) if v == maxValue]
     
     self.updatePotentiallyEatenEnemies(gameState)
     distributions = self.getDistributions(gameState)
-    
 
     self.displayDistributionsOverPositions(distributions)
     
-
     self.lastFood = self.getFoodYouAreDefending(gameState)
     self.lastPositions = {}
     for index in xrange(gameState.getNumAgents()):
@@ -431,24 +473,36 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
   """
   def getFeatures(self, gameState, action):
     features = util.Counter()
+    oldPos = gameState.getAgentPosition(self.index)
     successor = self.getSuccessor(gameState, action)
     features['successorScore'] = self.getScore(successor)
+    myState = successor.getAgentState(self.index)
+    myPos = myState.getPosition()
 
     # Compute distance to the nearest food
-    foodList = self.getFood(successor).asList()
-    if len(foodList) > 0: # This should always be True,  but better safe than sorry
-      myPos = successor.getAgentState(self.index).getPosition()
-      minDistance = min([self.getMazeDistance(myPos, food) for food in foodList])
-      features['distanceToFood'] = minDistance
+    
 
     """ NEW FEATURES """
-    optimalDefensePos = self.getOptimalFoodPosition(gameState, not self.red)
-    features["optimalAttackDistance"] = self.getMazeDistance(myPos, optimalDefensePos)
+
+    food = self.getFood(gameState)
+    foodDists = [self.getMazeDistance(piece, myPos) for piece in food.asList()]
+
+    features["foodDistance"] = self.getMSTWeight([myPos] + food.asList())
+    print action, features["foodDistance"]
+    features["closestFood"] = min(foodDists)
+    features["stop"] = action == "Stop"
+
+    enemyPositions = [self.getMostLikelyPosition(index, gameState) for index in self.getOpponents(gameState)]
+
+    for newPos in self.getNextPositions(gameState, myPos):
+      for enemyPosition in enemyPositions:
+        if newPos == enemyPosition:
+          features["tooClose"] += 1
 
     return features
 
   def getWeights(self, gameState, action):
-    return {'successorScore': 100, 'distanceToFood': -2, 'stop': -10, 'distanceFromEnemies': 2, 'distanceFromLikelyEnemies': 1, 'optimalAttackDistance': -1}
+    return {'successorScore': 100, 'tooClose': -10, 'stop': -1, 'foodDistance': -3, 'closestFood': -2}
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
   """
@@ -462,9 +516,8 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     global beliefs
 
     features = util.Counter()
+    oldPos = gameState.getAgentPosition(self.index)
     successor = self.getSuccessor(gameState, action)
-
-
     myState = successor.getAgentState(self.index)
     myPos = myState.getPosition()
 
@@ -472,19 +525,27 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     features['onDefense'] = 1
     if myState.isPacman: features['onDefense'] = 0
 
-    enemyPositions = [gameState.getAgentPosition(index) for index in self.getOpponents(gameState) if gameState.getAgentPosition(index) is not None]
-
     """ NEW FEATURES """
 
-    # optimalDefensePos = self.getOptimalFoodPosition(gameState, self.red)
-    # features["optimalDefenseDistance"] = self.getMazeDistance(myPos, optimalDefensePos) ** 2
+    mostLikelyEnemyPositions = [self.getMostLikelyPosition(index, gameState) for index in self.getOpponents(gameState)]
+    foodDistances = {}
 
-    mostLikelyPositions = [self.getMostLikelyPosition(index, gameState) for index in self.getOpponents(gameState)]
-    if len(enemyPositions) > 0:
-      features["invaderDistance"] = min([self.getMazeDistance(myPos, pos) for pos in mostLikelyPositions])
+    for enemy in mostLikelyEnemyPositions:
+      foodDistances[enemy] = [self.getMazeDistance(enemy, food) for food in self.getFoodYouAreDefending(successor).asList()]
+      print enemy, min(foodDistances[enemy])
+
+    sortedEnemies = sorted(mostLikelyEnemyPositions, key=lambda x: min(foodDistances[enemy]))
+    oldDistances = [self.getMazeDistance(oldPos, pos) for pos in mostLikelyEnemyPositions]
+    newDistances = [self.getMazeDistance(myPos, pos) for pos in mostLikelyEnemyPositions]
+    enemyOnOurSide = [self.onOurSide(gameState, pos) for pos in mostLikelyEnemyPositions]
+
+    mostDamagingEnemy = sortedEnemies[0]
+    self.mostDamagingEnemy = mostDamagingEnemy
+    features["enemyDistance"] = self.getMazeDistance(myPos, mostDamagingEnemy)
+    features["closestEnemy"] = min(newDistances)
 
     return features
 
   def getWeights(self, gameState, action):
-    return {'onDefense': 100, "invaderDistance": -10, 'optimalDefenseDistance': -2}
+    return {'onDefense': 1000, "enemyDistance": -5, "closestEnemy": -5}
 
