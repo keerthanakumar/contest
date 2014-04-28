@@ -1,3 +1,4 @@
+# __init__.py
 # config.py
 # ---------
 # Licensing Information: Please do not distribute or publish solutions to this
@@ -36,13 +37,12 @@ Settings:
 """
 
 # Alpha-Numeric only
-TeamName = 'StaticAgents'
+TeamName = 'NotAnAgent'
 
 # Filename.FactoryClassName (CASE-sensitive)
-AgentFactory = 'staticAgents.StaticAgents'
+AgentFactory = 'notAnAgent.NotAnAgent'
 
-Partners = ['Jaime Rivera','Keerthana Kumar']
-
+Partners = ['Not Staff']
 
 AgentArgs = {'first':'offense', 'second':'defense'}
 

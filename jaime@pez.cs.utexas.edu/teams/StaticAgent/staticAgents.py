@@ -315,19 +315,6 @@ class ReflexCaptureAgent(CaptureAgent):
       self.foodDistributions[team] = util.Counter()
       self.foodDistributions[team][positions[0]] = 1.0
 
-  def getOptimalFoodPosition(self, gameState, isRed):
-    if isRed == self.red:
-      dist = self.foodDistributions[self.red]
-    else:
-      dist = self.foodDistributions[not self.red]
-
-    values = dist.values()
-    if len(values) == 0:
-      return None
-
-    maxima = max(values)
-    positions = [pos for pos in dist if dist[pos] == maxima]
-    return positions[0]
 
   def chooseAction(self, gameState):
     """
@@ -345,7 +332,7 @@ class ReflexCaptureAgent(CaptureAgent):
     maxValue = max(values)
     bestActions = [a for a, v in zip(actions, values) if v == maxValue]
 
-    # self.displayDistributionsOverPositions(self.getDistributions(gameState))
+    self.displayDistributionsOverPositions(self.getDistributions(gameState))
     self.elapseTime(gameState)
     self.lastFood = self.getFoodYouAreDefending(gameState)
     return random.choice(bestActions)
@@ -405,13 +392,12 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
       features['distanceToFood'] = minDistance
 
     """ NEW FEATURES """
-    optimalDefensePos = self.getOptimalFoodPosition(gameState, not self.red)
-    features["optimalAttackDistance"] = self.getMazeDistance(myPos, optimalDefensePos)
+
 
     return features
 
   def getWeights(self, gameState, action):
-    return {'successorScore': 100, 'distanceToFood': -2, 'stop': -10, 'distanceFromEnemies': 2, 'distanceFromLikelyEnemies': 1, 'optimalAttackDistance': -1}
+    return {'successorScore': 100, 'distanceToFood': -2, 'distanceFromEnemies': 2, 'distanceFromLikelyEnemies': 1}
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
   """
@@ -435,18 +421,10 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     features['onDefense'] = 1
     if myState.isPacman: features['onDefense'] = 0
 
-    enemyPositions = [gameState.getAgentPosition(index) for index in self.getOpponents(gameState) if gameState.getAgentPosition(index) is not None]
-
     """ NEW FEATURES """
-
-    optimalDefensePos = self.getOptimalFoodPosition(gameState, self.red)
-    features["optimalDefenseDistance"] = self.getMazeDistance(myPos, optimalDefensePos) ** 2
-
-    if len(enemyPositions) > 0:
-      features["invaderDistance"] = min([self.getMazeDistance(myPos, pos) for pos in enemyPositions])
 
     return features
 
   def getWeights(self, gameState, action):
-    return {'onDefense': 100, "invaderDistance": -10, 'optimalDefenseDistance': -2}
+    return {'onDefense': 100}
 
