@@ -407,17 +407,6 @@ class ReflexCaptureAgent(CaptureAgent):
 
     return weight
 
-  def dfs(self, gameState, position, depth, seen=[]):
-    if depth == 0 or position in seen:
-      return 0
-
-    seen.append(position)
-    positions = 1
-    for pos in self.getNextPositions(position, gameState):
-      positions += self.dfs(gameState, pos, depth - 1, seen)
-
-    return positions
-
   def chooseAction(self, gameState):
     """
     Picks among the actions with the highest Q(s,a).
@@ -524,13 +513,10 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         if newPos == enemyPosition:
           features["tooClose"] += 1
 
-    seen = mostLikelyInvaderPositions + [myPos]
-    features["options"] = self.dfs(gameState, myPos, 5, seen)
-
     return features
 
   def getWeights(self, gameState, action):
-    return {'successorScore': 1000, 'tooClose': -100, 'stop': -1, 'foodDistance': -3, 'closestFood': -6, 'invaderDistance': -10, 'options': 2}
+    return {'successorScore': 1000, 'tooClose': -10, 'stop': -1, 'foodDistance': -3, 'closestFood': -6, 'invaderDistance': -10}
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
   """
@@ -560,8 +546,8 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     bestOptions = [pos for pos in defensePositions if defensePositions[pos] == maxima]
     bestDefenseOption = bestOptions[0]
 
-    # print "BEST DEFENSE", bestDefenseOption
-    # features["optimalDefenseDistance"] = self.getMazeDistance(myPos, bestDefenseOption) ** 2
+    print "BEST DEFENSE", bestDefenseOption
+    features["optimalDefenseDistance"] = self.getMazeDistance(myPos, bestDefenseOption) ** 2
 
     mostLikelyEnemyPositions = [self.getMostLikelyPosition(index, gameState) for index in self.getOpponents(gameState)]
     enemyStates = [(index, gameState.getAgentState(index)) for index in self.getOpponents(gameState)]
