@@ -10,7 +10,7 @@ from captureAgents import CaptureAgent
 from captureAgents import AgentFactory
 import distanceCalculator
 import random, time, util
-from game import Directions
+from game import Directions, Actions
 import keyboardAgents
 import game
 import capture
@@ -99,6 +99,7 @@ class ReflexCaptureAgent(CaptureAgent):
     global validPositions
 
     self.lastFood = None
+    self.lastPositions = {}
 
     if len(validPositions) == 0:
       # All positions are those that are not walls
@@ -111,6 +112,7 @@ class ReflexCaptureAgent(CaptureAgent):
   def initializeUniformly(self, enemyIndex, gameState):
     global beliefs
     global validPositions
+    global SIGHT_RANGE
 
     team = [gameState.getAgentPosition(index) for index in self.getTeam(gameState)]
     newBelief = util.Counter()
@@ -131,7 +133,7 @@ class ReflexCaptureAgent(CaptureAgent):
     return False
 
   def inRange(self, pos1, pos2, dist):
-    return self.getMazeDistance(pos1, pos2) <= dist
+    return util.manhattanDistance(pos1, pos2) <= dist
 
   def getMostLikelyEnemies(self, pos):
     global beliefs
@@ -152,8 +154,6 @@ class ReflexCaptureAgent(CaptureAgent):
     if index in self.getTeam(gameState):
       return game.getAgentPosition(index)
     else:
-      if len(beliefs[index].values()) == 0:
-        self.initializeUniformly(index, gameState)
       maxProb = max(beliefs[index].values())
       bestPositions = [position for position in beliefs[index].keys() if beliefs[index][position] == maxProb]
       return random.choice(bestPositions)
@@ -171,27 +171,32 @@ class ReflexCaptureAgent(CaptureAgent):
     return eatenFood
 
   def getNextPositions(self, gameState, pos):
-    global steps
-    positions = []
-
-    for step in steps:
-      x, y = int(pos[0] + step[0]), int(pos[1] + step[1])
-      if not gameState.hasWall(x, y):
-        positions.append((x, y))
-
-    return positions
+    return Actions.getLegalNeighbors(pos, gameState.getWalls())
 
   def establishLocation(self, enemyIndex, pos):
     global beliefs
-    global validPositions
 
     beliefs[enemyIndex] = util.Counter()
     beliefs[enemyIndex][pos] = 1.0
     beliefs[enemyIndex].normalize()
 
-  def updateBeliefs(self, gameState):
+  def updatePotentiallyEatenEnemies(self, gameState):
+    for enemyIndex in self.getOpponents(gameState):
+      if self.wasEaten(enemyIndex):
+        self.establishLocation(enemyIndex, gameState.getInitialAgentPosition(enemyIndex))
+
+  def wasEaten(self, enemyIndex):
+    if enemyIndex not in self.lastPositions:
+      return False
+    lastPos = self.lastPositions[enemyIndex]
+    currentPos = self.lastPositions[enemyIndex]
+
+    return lastPos is not None and currentPos is None
+
+  def observe(self, gameState):
     global beliefs
     global validPositions
+    global SIGHT_RANGE
 
     # Noisy Agent Distances
     agentDists = gameState.getAgentDistances()
@@ -199,27 +204,39 @@ class ReflexCaptureAgent(CaptureAgent):
     team = [gameState.getAgentPosition(index) for index in self.getTeam(gameState)]
 
     for enemyIndex in self.getOpponents(gameState):
+      assert sum(beliefs[enemyIndex].values()) >= .99999
+      
       newBelief = util.Counter()
       enemyPosition = gameState.getAgentPosition(enemyIndex)
 
       if enemyPosition is not None:
         self.establishLocation(enemyIndex, enemyPosition)
+        continue
       else:
         noisyDistance = agentDists[enemyIndex]
+
         for position in beliefs[enemyIndex]:
 
-          if position not in validPositions or self.inRangeOfAny(team, position, SIGHT_RANGE):
+          if self.inRangeOfAny(team, position, SIGHT_RANGE): # buggy af
             continue
 
-          trueDistance = abs(position[0] - myPos[0]) + abs(position[1] - myPos[1])
-          positionBelief = beliefs[enemyIndex][position] * gameState.getDistanceProb(noisyDistance, trueDistance)
-          if positionBelief != 0.0:
-            newBelief[position] = positionBelief
-      if sum(beliefs[enemyIndex].values()) == 0:
+          trueDistance = util.manhattanDistance(myPos, position)
+          distanceProb = gameState.getDistanceProb(trueDistance, noisyDistance)
+
+          positionBelief = beliefs[enemyIndex][position] * distanceProb
+          newBelief[position] = positionBelief
+
+      if sum(newBelief.values()) == 0:
         self.initializeUniformly(enemyIndex, gameState)
-      elif enemyPosition is None:
+        # self.updatePotentiallyEatenEnemies(gameState)
+
+        # if sum(newBelief.values()) == 0:
+        #   assert False
+      else:
         newBelief.normalize()
         beliefs[enemyIndex] = newBelief
+
+      assert sum(beliefs[enemyIndex].values()) >= .99999
 
     if self.lastFood == None:
       return
@@ -236,53 +253,63 @@ class ReflexCaptureAgent(CaptureAgent):
       chosenIndices.append(mostLikelyIndices[index])
       self.establishLocation(mostLikelyIndices[index], food)
 
-
   def elapseTime(self, gameState):
     global beliefs
     global validPositions
+    global SIGHT_RANGE
 
     newBeliefs = {}
     team = [gameState.getAgentPosition(index) for index in self.getTeam(gameState)]
 
     for enemyIndex in self.getOpponents(gameState):
+      
+      if (enemyIndex + 1) % gameState.getNumAgents() != self.index:
+        continue
+
       newBeliefs[enemyIndex] = util.Counter()
 
-      for oldPos in validPositions:
-        newPositions = self.getNextPositions(gameState, oldPos)
+      for oldPos in beliefs[enemyIndex]:
+        if beliefs[enemyIndex][oldPos] == 0.0:
+          continue
+
+        newPositions = self.getNextPositions(gameState, oldPos) # Use legal neighbors?
 
         for newPos in newPositions:
-          if self.inRangeOfAny(team, newPos, SIGHT_RANGE):
-            continue
-          if newPos not in newBeliefs[enemyIndex]:
-            newBeliefs[enemyIndex][newPos] = 0.0
-          newBeliefs[enemyIndex][newPos] += beliefs[enemyIndex][oldPos] * 1 / len(newPositions)
+          if newPos in validPositions:# or self.inRangeOfAny(team, newPos, SIGHT_RANGE):
+            if newPos not in newBeliefs[enemyIndex]:
+              newBeliefs[enemyIndex][newPos] = 0.0
 
+            newBeliefs[enemyIndex][newPos] += (beliefs[enemyIndex][oldPos] * 1.0) / len(newPositions)
+      
       newBeliefs[enemyIndex].normalize()
+      beliefs[enemyIndex] = newBeliefs[enemyIndex]
 
-    beliefs = newBeliefs
+  def anyInvalidPositions(self):
+    global beliefs
+    global validPositions
+
+    for enemyIndex in beliefs:
+      for pos in beliefs[enemyIndex]:
+        if pos not in validPositions:
+          return True
+
+    return False
 
   def getDistributions(self, gameState):
     global beliefs
-
+    
     distributions = []
     opponents = self.getOpponents(gameState)
     mostLikelyPositions = [self.getMostLikelyPosition(enemyIndex, gameState) for enemyIndex in self.getOpponents(gameState)]
 
     for index in xrange(gameState.getNumAgents()):
       if index in opponents:
-        distributions.append(beliefs[index])
+        distributions.append(beliefs[index].copy())
       else:
-        mlp = util.Counter()
-        mlp[mostLikelyPositions.pop()] = 1.0
-        distributions.append(mlp)
+        distributions.append(None)
 
     for foodDist in self.foodDistributions:
       distributions.append(self.foodDistributions[foodDist])
-    # distributions.append(self.foodDistributions[self.red])
-    # for index in xrange(gameState.getNumAgents()):
-    #   thing = util.Counter()
-    #   thing[gameState.getInitialAgentPosition(index)] = 1.0
-    #   distributions.append(thing)
 
     return distributions
 
@@ -333,7 +360,8 @@ class ReflexCaptureAgent(CaptureAgent):
     """
     Picks among the actions with the highest Q(s,a).
     """
-    self.updateBeliefs(gameState)
+    self.elapseTime(gameState)
+    self.observe(gameState)
     self.setFoodDistanceDistribution(gameState)
     actions = gameState.getLegalActions(self.index)
 
@@ -344,10 +372,19 @@ class ReflexCaptureAgent(CaptureAgent):
 
     maxValue = max(values)
     bestActions = [a for a, v in zip(actions, values) if v == maxValue]
+    
+    self.updatePotentiallyEatenEnemies(gameState)
+    distributions = self.getDistributions(gameState)
+    
 
-    # self.displayDistributionsOverPositions(self.getDistributions(gameState))
-    self.elapseTime(gameState)
+    self.displayDistributionsOverPositions(distributions)
+    
+
     self.lastFood = self.getFoodYouAreDefending(gameState)
+    self.lastPositions = {}
+    for index in xrange(gameState.getNumAgents()):
+      self.lastPositions[index] = gameState.getAgentPosition(index)
+
     return random.choice(bestActions)
 
   def getSuccessor(self, gameState, action):
@@ -439,11 +476,12 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
 
     """ NEW FEATURES """
 
-    optimalDefensePos = self.getOptimalFoodPosition(gameState, self.red)
-    features["optimalDefenseDistance"] = self.getMazeDistance(myPos, optimalDefensePos) ** 2
+    # optimalDefensePos = self.getOptimalFoodPosition(gameState, self.red)
+    # features["optimalDefenseDistance"] = self.getMazeDistance(myPos, optimalDefensePos) ** 2
 
+    mostLikelyPositions = [self.getMostLikelyPosition(index, gameState) for index in self.getOpponents(gameState)]
     if len(enemyPositions) > 0:
-      features["invaderDistance"] = min([self.getMazeDistance(myPos, pos) for pos in enemyPositions])
+      features["invaderDistance"] = min([self.getMazeDistance(myPos, pos) for pos in mostLikelyPositions])
 
     return features
 
