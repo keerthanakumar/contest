@@ -489,7 +489,7 @@ class ReflexCaptureAgent(CaptureAgent):
     # You can profile your evaluation time by uncommenting these lines
     start = time.time()
     values = [self.evaluate(gameState, a) for a in actions]
-    print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
+    # print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
 
     maxValue = max(values)
     bestActions = [a for a, v in zip(actions, values) if v == maxValue]
@@ -742,6 +742,15 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
     """ FEATURES """
 
     features = util.Counter()
+    features["offense"] = 1 if isPacman else 0
+
+    features["far-ghost-distance"] = 0.0
+    for enemyPosition in enemyPositions:
+      dist = self.getMazeDistance(newPos, enemyPosition)
+      if dist > SIGHT_RANGE or not isPacman:
+        features["far-ghost-distance"] += dist
+
+
     myState = gameState.getAgentState(self.index)
 
     mostLikelyInvaderPositions = [self.getMostLikelyPosition(index, gameState) for index in self.getOpponents(gameState) if gameState.getAgentState(index).isPacman]
@@ -751,7 +760,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
 
     for invader in mostLikelyInvaderPositions:
       dist = self.getMazeDistance(invader, newPos)
-      if dist <= SIGHT_RANGE and not myState.isPacman and not len(pacmen) == len(enemyStates):
+      if dist <= SIGHT_RANGE / 2 and not myState.isPacman and not len(pacmen) == len(enemyStates):
         features["invaderDistance"] = dist
         return features
 
@@ -834,15 +843,6 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
       elif len(freeEnemyfood) == 0: # If we can't do anything else, find the closest slot to take
           features["trapped-food-distance"] = oldDistToTrappedFood - newDistToTrappedFood
 
-    # if isPacman:
-    #   # The more positive, the better
-    #   teamWallXCoordinate = teamWall[0][0]
-    #   features["distance-from-team-wall"] = newPos[0] - teamWallXCoordinate
-    # else:
-    #   # The more negative, the better
-    #   enemyWallXCoordinate = enemyWall[0][0]
-    #   features["distance-from-enemy-wall"] = newPos[0] - enemyWallXCoordinate
-
     return features
 
   def getWeights(self, gameState, action):
@@ -865,6 +865,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
       'distance-from-enemy-wall': -10,
       'min-food-distance': -10,
       'dist-to-invader': 15,
+      'far-ghost-distance': 5,
     }
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
@@ -889,8 +890,6 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     if myState.isPacman: features['onDefense'] = 0
 
     """ NEW FEATURES """
-    teamWall = self.getTeamWall(gameState)
-
     believedPositions = []
     for enemyIndex in beliefs:
       believedPositions += beliefs[enemyIndex].keys()
@@ -988,5 +987,13 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     return features
 
   def getWeights(self, gameState, action):
-    return {'finalDefense': -100000, 'onDefense': 100000000, "closestEnemy": -30, 'optimalDefenseDistance': -5, 'closestFood': 10, 'closestEater': -15, 'closestFoodWhileTracking': -1}
+    return {
+      'finalDefense': -100000,
+      'onDefense': 100000000,
+      "closestEnemy": -30,
+      'optimalDefenseDistance': -5,
+      'closestFood': 10,
+      'closestEater': -15,
+      'closestFoodWhileTracking': -1,
+    }
 

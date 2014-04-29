@@ -834,15 +834,6 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
       elif len(freeEnemyfood) == 0: # If we can't do anything else, find the closest slot to take
           features["trapped-food-distance"] = oldDistToTrappedFood - newDistToTrappedFood
 
-    # if isPacman:
-    #   # The more positive, the better
-    #   teamWallXCoordinate = teamWall[0][0]
-    #   features["distance-from-team-wall"] = newPos[0] - teamWallXCoordinate
-    # else:
-    #   # The more negative, the better
-    #   enemyWallXCoordinate = enemyWall[0][0]
-    #   features["distance-from-enemy-wall"] = newPos[0] - enemyWallXCoordinate
-
     return features
 
   def getWeights(self, gameState, action):
@@ -988,5 +979,13 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     return features
 
   def getWeights(self, gameState, action):
-    return {'finalDefense': -100000, 'onDefense': 100000000, "closestEnemy": -30, 'optimalDefenseDistance': -5, 'closestFood': 10, 'closestEater': -15, 'closestFoodWhileTracking': -1}
+    return {
+      'finalDefense': -100000,
+      'onDefense': 100000000,
+      "closestEnemy": -30,
+      'optimalDefenseDistance': -5,
+      'closestFood': 10,
+      'closestEater': -15,
+      'closestFoodWhileTracking': -1,
+    }
 
