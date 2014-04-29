@@ -681,6 +681,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
     oldPos = gameState.getAgentPosition(self.index)
     newPos = successor.getAgentPosition(self.index)
 
+    wasPacman = gameState.getAgentState(self.index).isPacman
     isPacman = successor.getAgentState(self.index).isPacman
 
     enemyValidPositions = self.getEnemyValidPositions(gameState)
@@ -690,12 +691,23 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
     teamWall = self.getTeamWall(gameState)
 
     enemyFood = self.getFood(gameState).asList()
+    teamFood = self.getFoodYouAreDefending(gameState).asList()
+    allFood = enemyFood + teamFood
+
+    enemyFoodLeft = len(enemyFood)
+    teamFoodLeft =len(teamFood)
 
     enemyFoodDict = self.getFoodExitDict(gameState, enemyFood)
+    teamFoodDict = self.getFoodExitDict(gameState, teamFood)
+    allFoodDict = self.getFoodExitDict(gameState, allFood)
 
     trappedEnemyFood = self.getTrappedFood(enemyFoodDict) 
+    trappedTeamFood = self.getTrappedFood(teamFoodDict)
+    trappedAllFood = self.getTrappedFood(allFoodDict)
 
     freeEnemyfood = self.getFreeFood(enemyFoodDict)
+    freeTeamFood = self.getFreeFood(teamFoodDict)
+    freeAllFood = self.getFreeFood(allFoodDict)
 
     enemyIndices = self.getOpponents(gameState)
     enemyStates = [gameState.getAgentState(index) for index in enemyIndices]
@@ -710,13 +722,13 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
     """ Inference Variables (mixed) """
 
     enemyPositions = [self.getMostLikelyPosition(index, gameState) for index in enemyIndices]
+    teamPositions = [gameState.getAgentPosition(index) for index in teamIndices]
 
     #############################################################
 
     """ FEATURES """
 
     features = util.Counter()
-    myState = gameState.getAgentState(self.index)
 
     mostLikelyInvaderPositions = [self.getMostLikelyPosition(index, gameState) for index in self.getOpponents(gameState) if gameState.getAgentState(index).isPacman]
     mostLikelyGhostPositions = [self.getMostLikelyPosition(index, gameState) for index in self.getOpponents(gameState) if not gameState.getAgentState(index).isPacman]
@@ -724,14 +736,14 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
     pacmen = [(index, state) for (index, state) in enemyStates if state.isPacman]
 
     for invader in mostLikelyInvaderPositions:
-      dist = self.getMazeDistance(invader, newPos)
-      if dist <= SIGHT_RANGE and not myState.isPacman and not len(pacmen) == len(enemyStates):
+      dist = self.getMazeDistance(invader, myPos)
+      if dist <= SIGHT_RANGE and not myState.isPacman and not len(pacmen) == len(enemyStates) and not attackerCount == len(self.getOpponents(gameState)):
         features["invaderDistance"] = dist
         return features
 
-    foodDists = [self.getMazeDistance(newPos, food) for food in enemyFood]
-    features["min-food-distance"] = min(foodDists)
     if len(enemyPacmen) == len(enemyIndices):
+      foodDists = [self.getMazeDistance(newPos, food) for food in enemyFood]
+      features["min-food-distance"] = min(foodDists)
       return features
 
     # Prevent death
@@ -764,21 +776,14 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
 
       # Sort food from what was closest previously.
       closestFreeEnemyFoodList = sorted(freeEnemyfood, key=lambda food: self.distanceToPath(gameState, oldPos, food, enemyPositions))
-      copyFreeFood = closestFreeEnemyFoodList[:]
-      for enemyPosition in enemyPositions:
-        for food in copyFreeFood:
-          if self.getMazeDistance(food, enemyPosition) <= SIGHT_RANGE and food in closestFreeEnemyFoodList:
-            closestFreeEnemyFoodList.remove(food)
+      closestFreeEnemyFood = closestFreeEnemyFoodList[0]
 
-      if len(closestFreeEnemyFoodList) > 0:
-        closestFreeEnemyFood = closestFreeEnemyFoodList[0]
+      oldDistance = self.distanceToPath(gameState, closestFreeEnemyFood, oldPos, enemyPositions)
+      newDistance = self.distanceToPath(gameState, closestFreeEnemyFood, newPos, enemyPositions)
 
-        oldDistance = self.distanceToPath(gameState, closestFreeEnemyFood, oldPos, enemyPositions)
-        newDistance = self.distanceToPath(gameState, closestFreeEnemyFood, newPos, enemyPositions)
-
-        # We want values to be binary, so we take the difference in distances.
-        # The more positive, the better.
-        features["free-food-distance"] = oldDistance - newDistance
+      # We want values to be binary, so we take the difference in distances.
+      # The more positive, the better.
+      features["free-food-distance"] = oldDistance - newDistance
 
     # Eat closest trapped food relative to your old position
     # if your belief to survive is strong.
@@ -819,28 +824,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
     return features
 
   def getWeights(self, gameState, action):
-    return {
-      'successorScore': 1000,
-      'reverse': -10,
-      'offense': 100,
-      'tooClose': -10000,
-      'stop': -10,
-      'foodDistance': -3,
-      'closestFood': -10,
-      'invaderDistance': -10,
-      'options': 5,
-      'samePosition': -2,
-      'ghostDist': 5,
-      'initial-position': -1e10,
-      '1-dist-ghost-count': -1000,
-      'trapped-food-distance': 150,
-      'free-food-distance': 100,
-      'distance-from-wall': 20,
-      'distance-from-team-wall': 10,
-      'distance-from-enemy-wall': -10,
-      'min-food-distance': -10,
-      'dist-to-invader': 15,
-    }
+    return {'successorScore': 1000, 'reverse': -10, 'offense': 100, 'tooClose': -10000, 'stop': -10, 'foodDistance': -3, 'closestFood': -10, 'invaderDistance': -10, 'options': 5, 'samePosition': -2, 'ghostDist': 5}
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
   """
