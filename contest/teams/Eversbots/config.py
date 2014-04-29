@@ -36,14 +36,13 @@ Settings:
 """
 
 # Alpha-Numeric only
-TeamName = 'StaticAgents'
+TeamName = 'Eversbots'
 
 # Filename.FactoryClassName (CASE-sensitive)
-AgentFactory = 'humbleAgents.HumbleAgents'
+AgentFactory = 'eversbots.EversbotAgents'
 
-Partners = ['Jaime Rivera','Keerthana Kumar']
+Partners = ['Josh Eversmann']
 
-
-AgentArgs = {'first':'offense', 'second':'defense'}
+AgentArgs = {'first':'offense', 'second':'offense'}
 
 NotifyList = []
