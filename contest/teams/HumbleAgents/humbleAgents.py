@@ -487,7 +487,7 @@ class ReflexCaptureAgent(CaptureAgent):
     self.updatePotentiallyEatenEnemies(gameState)
     distributions = self.getDistributions(gameState)
 
-    # self.displayDistributionsOverPositions(distributions)
+    self.displayDistributionsOverPositions(distributions)
     
     self.lastFood = self.getFoodYouAreDefending(gameState)
     self.lastPositions = {}
