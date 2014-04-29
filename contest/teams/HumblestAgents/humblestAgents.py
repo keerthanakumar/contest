@@ -270,7 +270,7 @@ class ReflexCaptureAgent(CaptureAgent):
     # You can profile your evaluation time by uncommenting these lines
     start = time.time()
     values = [self.evaluate(gameState, a) for a in actions]
-    print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
+    # print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
 
     maxValue = max(values)
     bestActions = [a for a, v in zip(actions, values) if v == maxValue]
@@ -536,7 +536,7 @@ class ReflexCaptureAgent(CaptureAgent):
         pos_distance = sorted(pos_distance, key=lambda pos_dist: pos_dist[1])
         bestDefensivePosition = pos_distance[0][0]
 
-        print bestDefensivePosition
+        # print bestDefensivePosition
         oldDistanceToDefensivePos = self.getMazeDistance(oldPos, bestDefensivePosition)
         newDistanceToDefensivePos = self.getMazeDistance(newPos, bestDefensivePosition)
 
